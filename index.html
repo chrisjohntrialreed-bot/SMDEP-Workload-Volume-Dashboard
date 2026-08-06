@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ILO.SMDEP Workload Volume Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+  --navy:#2579e7;--navy2:#f19306;--gold:#d6ad4f;--blue:#3d6680;
+  --bg:#f3f4f6;--panel:#fff;--line:#d9d9d9;--text:#1f2937;
+  --red:#dc2626;--yellow:#eab308;--green:#16a34a;--sky:#87ceeb;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,sans-serif;color:var(--text)}
+.app{width:98%;max-width:none;margin:auto;background:#fff;border:1px solid #dbeafe;border-radius:12px;padding:18px;box-shadow:0 4px 14px rgba(135,206,235,.28)}
+.header{background:linear-gradient(90deg,var(--navy),var(--navy2));color:#fff;border-radius:8px;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:0 4px 12px rgba(135,206,235,.35)}
+.header h1{margin:0;font-size:32px;letter-spacing:1px;font-weight:800;text-shadow:1px 1px 2px rgba(0,0,0,.35)}
+.header .icon{font-size:30px;margin-right:14px}.title-wrap{display:flex;align-items:center}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.btn,label.btn{background:var(--navy);color:#fff;border:0;border-radius:6px;padding:10px 16px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}.btn:hover,label.btn:hover{background:var(--navy2)}.btn.gold{background:var(--gold);color:#111827}.file{display:none}
+.top-controls{display:flex;align-items:center;gap:18px;margin:16px 0;flex-wrap:nowrap}.controls{flex:1;display:flex;justify-content:flex-start;gap:18px;flex-wrap:wrap;margin:0}.control{border:1px solid #dbeafe;border-radius:10px;padding:10px;background:#fff;width:310px;box-shadow:0 4px 12px rgba(135,206,235,.25)}.control label{display:block;font-size:12px;font-weight:800;color:var(--navy);margin-bottom:5px}.control input,.control select{width:100%;padding:9px;border:1px solid #cfd6df;border-radius:4px;background:#fff}.checkbox-box{max-height:118px;overflow:auto;border:1px solid #cfd6df;border-radius:4px;padding:8px;background:#fff}.check-row{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:13px;color:#1f2937}.check-row input{width:auto}.check-row label{margin:0;color:#1f2937;font-weight:600;font-size:13px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:12px 0}.card{background:#fff;border:1px solid #dbeafe;border-radius:10px;text-align:center;padding:14px;box-shadow:0 4px 12px rgba(135,206,235,.30)}.card h3{font-size:14px;margin:0 0 8px;color:#1f2937;text-transform:uppercase}.card .value{font-size:42px;line-height:1;font-weight:800;color:#20364d}.card small{display:block;margin-top:6px;color:#64748b}
+.grid{display:grid;grid-template-columns:380px 1.6fr 1.15fr;gap:16px;align-items:stretch}.editor-wide{grid-column:auto;min-width:0}.editor-wide .section{min-height:920px;height:100%;display:flex;flex-direction:column}.editor-wide .table-wrap{flex:1;max-height:760px;overflow-y:auto}.editor-wide table{font-size:12px}.editor-wide th,.editor-wide td{padding:6px 7px;line-height:1.15}.editor-wide .reph-art{padding:16px 10px}.section{background:#fff;border:1px solid #dbeafe;border-radius:10px;padding:14px;box-shadow:0 4px 12px rgba(135,206,235,.30);margin-bottom:16px}.section h2{text-align:center;font-size:17px;margin:0 0 12px;color:#1f2937;text-transform:uppercase}.chart-box{height:250px}.chart-small{height:210px}.table-wrap{overflow:auto;max-height:330px}table{width:100%;border-collapse:collapse;font-size:14px;box-shadow:0 4px 12px rgba(135,206,235,.20);border-radius:8px;overflow:hidden}th{background:var(--navy);color:white;padding:10px;text-align:left}td{border-bottom:1px solid #e5e7eb;padding:9px}td.num{text-align:right;font-weight:700}.remaining-ok{color:var(--green);font-weight:800}.remaining-due{color:var(--red);font-weight:800}.progress-row{margin:16px 0}.progress-label{display:flex;justify-content:space-between;font-size:14px;margin-bottom:7px}.track{height:24px;background:#eee;border-radius:4px;overflow:hidden}.fill{height:100%;width:0;background:var(--blue);transition:.3s}.status-pill{display:inline-block;padding:8px 15px;border-radius:5px;color:white;font-weight:800}.status-below{background:var(--red)}.status-on{background:var(--yellow);color:#111}.status-above{background:var(--green)}.hint{font-size:12px;color:#64748b;text-align:center;margin-top:10px}.full{grid-column:1/-1}.donut-summary{text-align:center;margin-top:8px;font-size:13px;color:#334155}.donut-summary b{color:#0f172a}
+
+.reph-art{
+  margin:0;
+  width:280px;
+  min-width:280px;
+  min-height:132px;
+  border-radius:12px;
+  border:1px solid #dbeafe;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255,255,255,.95), rgba(255,255,255,.70) 45%, rgba(37,121,231,.10) 100%),
+    linear-gradient(135deg, rgba(37,121,231,.16), rgba(241,147,6,.16));
+  box-shadow:0 4px 12px rgba(135,206,235,.30);
+  position:relative;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+.reph-art:before,.reph-art:after{
+  content:'';
+  position:absolute;
+  bottom:-18px;
+  width:78px;
+  height:78px;
+  border-bottom:7px solid var(--navy);
+  border-left:7px solid var(--gold);
+  transform:rotate(45deg);
+  opacity:.95;
+}
+.reph-art:before{left:-12px}
+.reph-art:after{right:-12px;transform:rotate(225deg)}
+.reph-mark{
+  width:54px;
+  height:54px;
+  margin:0 auto 7px;
+  border-radius:50%;
+  background:linear-gradient(135deg,var(--navy),var(--navy2));
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:28px;
+  font-weight:900;
+  box-shadow:0 5px 12px rgba(37,121,231,.28);
+}
+.reph-title{font-size:28px;font-weight:900;letter-spacing:1px;color:var(--navy);line-height:1}
+.reph-subtitle{font-size:18px;font-weight:900;color:var(--navy2);letter-spacing:.5px;margin-top:3px}
+.reph-tagline{font-size:11px;color:#475569;font-weight:700;margin-top:4px;text-transform:uppercase}
+
+@media(max-width:900px){.grid,.kpis{grid-template-columns:1fr}.header{display:block}.header h1{font-size:24px}.actions{margin-top:12px}.card .value{font-size:34px}.top-controls{flex-direction:column;align-items:stretch}.reph-art{width:100%;min-width:0}.control{width:100%}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="title-wrap"><span class="icon">▥</span><h1>ILO.SMDEP Workload Volume Dashboard</h1></div>
+    <div class="actions">
+      <label for="fileInput" class="btn gold">Upload Excel / CSV</label>
+      <input id="fileInput" class="file" type="file" accept=".xlsx,.xls,.csv" multiple>
+      <button class="btn" onclick="resetDashboard()">Reset</button>
+      <button class="btn" onclick="downloadReport()">Export Report</button>
+    </div>
+  </header>
+
+  <div class="top-controls">
+    <div class="reph-art" aria-label="REPH ILO SMDEP design art">
+      <div>
+        <div class="reph-mark">▥</div>
+        <div class="reph-title">REPH</div>
+        <div class="reph-subtitle">ILO SMDEP</div>
+        <div class="reph-tagline">Workload Volume Dashboard</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="control"><label>Start Date</label><input id="startDate" type="date" onchange="render()"></div>
+      <div class="control"><label>End Date</label><input id="endDate" type="date" onchange="render()"></div>
+      <div class="control"><label>JX Filter Optional</label><div id="jxCheckboxes" class="checkbox-box"><div class="check-row"><input type="checkbox" id="jxAll" checked onchange="handleJxAll()"><label for="jxAll">All JXs</label></div></div></div>
+    </div>
+  </div>
+
+  <section class="kpis">
+    <div class="card"><h3>Full-Time</h3><div id="fte" class="value">22</div></div>
+    <div class="card"><h3>Monthly Volume</h3><div id="monthlyVolume" class="value">0</div><small>Filtered total</small></div>
+    <div class="card"><h3>Productivity Status</h3><div id="statusText" class="value" style="font-size:28px">Below Target</div><small id="statusSub">0 documents</small></div>
+  </section>
+
+  <div class="grid">
+    <div class="editor-wide">
+      <section class="section">
+        <h2>Editor Productivity</h2>
+        <div class="table-wrap"><table><thead><tr><th>Editor Name</th><th>Total Volume</th><th>Target</th><th>Remaining</th></tr></thead><tbody id="editorBody"><tr><td colspan="4">No data loaded.</td></tr></tbody></table></div>
+      </section>
+    </div>
+
+    <div>
+      <section class="section">
+        <h2>Monthly Volume vs Target</h2>
+        <div class="chart-box"><canvas id="monthlyChart"></canvas></div>
+      </section>
+      <section class="section">
+        <h2>Productivity Metrics</h2>
+        <div class="progress-row"><div class="progress-label"><span>Monthly productivity</span><b id="monthlyProductivity">0% - Below Target</b></div><div class="track"><div id="monthlyProductivityBar" class="fill"></div></div></div>
+        <div class="progress-row"><div class="progress-label"><span>Average monthly volume</span><b id="avgMonthly">0</b></div><div class="track"><div id="avgMonthlyBar" class="fill"></div></div></div>
+        <div class="progress-row"><div class="progress-label"><span>Output per FTE</span><b id="outputFte">0.00</b></div><div class="track"><div id="fteBar" class="fill"></div></div></div>
+      </section>
+    </div>
+
+    <div>
+      <section class="section">
+        <h2>Goal Progress</h2>
+        <div class="chart-small"><canvas id="goalChart"></canvas></div>
+        <div style="text-align:center;margin-top:12px"><span id="statusPill" class="status-pill status-below">Below Target</span></div>
+      </section>
+      <section class="section">
+        <h2>Annual Target Progress</h2>
+        <div class="chart-small"><canvas id="annualDonutChart"></canvas></div>
+        <div class="donut-summary">
+          Current: <b id="annualCurrent">0</b><br>
+          Remaining Needed: <b id="annualRemaining">400,000</b><br>
+          Progress: <b id="annualPercent">0.0%</b>
+        </div>
+      </section>
+    </div>
+
+  </div>
+</div>
+<script>
+const FTE = 22;
+const TARGET_VOLUME = 57200;
+const ANNUAL_TARGET = 400000;
+const SPECIAL_EDITOR_TARGET = 1575;
+const DEFAULT_EDITOR_TARGET = 3150;
+const SPECIAL_EDITORS = ['tiron','baricuatro','hervias','rebua','sucatron','gregorio'];
+function isSpecialEditor(name){
+  const text = String(name || '').toLowerCase();
+  return SPECIAL_EDITORS.some(s => text.includes(s));
+}
+function editorTargetFor(name){
+  return isSpecialEditor(name) ? SPECIAL_EDITOR_TARGET : DEFAULT_EDITOR_TARGET;
+}
+const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let rawRows = [];
+let records = [];
+let monthlyChart = null;
+let goalChart = null;
+let annualDonutChart = null;
+const $ = id => document.getElementById(id);
+
+function norm(s){return String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g,'');}
+function first(row,names){
+  const keys = Object.keys(row || {});
+  for(const name of names){
+    const nn = norm(name);
+    const k = keys.find(x => norm(x) === nn || norm(x).includes(nn) || nn.includes(norm(x)));
+    if(k && String(row[k] ?? '').trim() !== '') return row[k];
+  }
+  return '';
+}
+function num(v){
+  const n = parseFloat(String(v ?? '').replace(/,/g,'').replace(/%/g,'').trim());
+  return isNaN(n) ? 0 : n;
+}
+function esc(s){return String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function parseDate(v){
+  if(v instanceof Date && !isNaN(v)) return v;
+  const s = String(v ?? '').trim();
+  if(/^\d{8}$/.test(s)){
+    const y = +s.slice(0,4), m = +s.slice(4,6)-1, d = +s.slice(6,8);
+    const dt = new Date(y,m,d);
+    return isNaN(dt) ? null : dt;
+  }
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)){
+    const [y,m,d] = s.split('-').map(Number);
+    const dt = new Date(y,m-1,d);
+    return isNaN(dt) ? null : dt;
+  }
+  const dt = new Date(s);
+  return isNaN(dt) ? null : dt;
+}
+function detectJx(row){
+  const direct = first(row,['JX','Jurisdiction','County','Court County','Location']);
+  const text = (direct + ' ' + JSON.stringify(row)).toLowerCase();
+  const patterns = [
+    ['mo-jackson','MO-Jackson'],['mo_jackson','MO-Jackson'],['jackson','MO-Jackson'],
+    ['pa_clearfield','PA_Clearfield'],['pa-clearfield','PA_Clearfield'],['clearfield','PA_Clearfield'],
+    ['pa_allegheny','PA_Allegheny'],['pa-allegheny','PA_Allegheny'],['allegheny','PA_Allegheny'],
+    ['pa_york','PA_York'],['pa-york','PA_York'],['york','PA_York'],
+    ['pa_dauphin','PA_Dauphin'],['pa-dauphin','PA_Dauphin'],['dauphin','PA_Dauphin']
+  ];
+  for(const [p,val] of patterns){ if(text.includes(p)) return val; }
+  return direct ? String(direct).trim().replace(/\s+/g,'_') : 'Unknown';
+}
+function isSummaryRow(row){
+  const text = Object.values(row || {}).join(' ').toLowerCase().trim();
+  const marker = String(first(row,['FTE','Specialist','Editor','Editor Name','User','Employee','Name','Document Title','Title']) || '').toLowerCase().trim();
+  if(!text) return true;
+  if(['accuracy','total','grand total','summary','average','target','remaining','monthly volume','volume','count'].includes(marker)) return true;
+  if(/^total\b|grand total|summary row|overall total/.test(text)) return true;
+  return false;
+}
+function mapRows(rows){
+  return rows.filter(row=>!isSummaryRow(row)).map((row,i)=>{
+    const fileDate = first(row,['File Date','Date','Completed Date','Production Date','Process Date']);
+    const dt = parseDate(fileDate);
+    const fileName = first(row,['File Name','Filename','Document Name','Name','Title','File']);
+    let volume = num(first(row,['Actual Volume','Volume','Count','Total Volume','Monthly Volume','Documents','Files','Output']));
+    if(volume === 0) volume = 1;
+    return {
+      recordId:first(row,['Record ID','ID','No']) || i+1,
+      docTitle:first(row,['Document Title','Doc Title','Title']) || fileName,
+      caseNumber:first(row,['Case Number','Case No','Docket Number']),
+      fileDate:fileDate || '',
+      date:dt,
+      jx:detectJx(row),
+      folder:first(row,['Folder','Folder Name','Document Type','Type']),
+      volume,
+      editor:first(row,['FTE','Specialist','Editor','Editor Name','User','Employee','Name']) || 'Unknown'
+    };
+  }).filter(r => r.docTitle || r.caseNumber || r.fileDate || r.jx !== 'Unknown' || r.editor !== 'Unknown');
+}
+function getMetricStatus(volume){
+  if(volume < TARGET_VOLUME) return {text:'Below Target', color:'#dc2626', cls:'status-below'};
+  if(volume === TARGET_VOLUME) return {text:'On Target', color:'#eab308', cls:'status-on'};
+  return {text:'Above Target', color:'#16a34a', cls:'status-above'};
+}
+const donutCenterText = {
+  id:'donutCenterText',
+  afterDraw(chart){
+    if(chart.canvas.id !== 'annualDonutChart') return;
+    const meta = chart.getDatasetMeta(0);
+    if(!meta || !meta.data || !meta.data[0]) return;
+    const ctx = chart.ctx;
+    const x = meta.data[0].x;
+    const y = meta.data[0].y;
+    const total = chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+    const current = chart.data.datasets[0].data[0] || 0;
+    const pct = ANNUAL_TARGET > 0 ? Math.min((current / ANNUAL_TARGET) * 100, 100) : 0;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#20364d';
+    ctx.font = '700 20px Segoe UI, Arial';
+    ctx.fillText(pct.toFixed(1) + '%', x, y - 8);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '600 11px Segoe UI, Arial';
+    ctx.fillText('to 400,000', x, y + 14);
+    ctx.restore();
+  }
+};
+function initCharts(){
+  monthlyChart = new Chart($('monthlyChart'),{
+    type:'bar',
+    data:{labels:months,datasets:[
+      {label:'Actual Volume',data:Array(12).fill(0),backgroundColor:'#3d6680'},
+      {label:'Target 57,200',type:'line',data:Array(12).fill(TARGET_VOLUME),borderColor:'#d6ad4f',backgroundColor:'#d6ad4f',pointRadius:2,tension:0}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}}}
+  });
+  goalChart = new Chart($('goalChart'),{
+    type:'bar',
+    data:{labels:['Actual','Target'],datasets:[{label:'Volume',data:[0,TARGET_VOLUME],backgroundColor:['#3d6680','#d6ad4f']}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}
+  });
+  annualDonutChart = new Chart($('annualDonutChart'),{
+    type:'doughnut',
+    data:{labels:['Current Volume','Remaining Needed'],datasets:[{data:[0,ANNUAL_TARGET],backgroundColor:['#16a34a','#87ceeb'],borderColor:'#fff',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:function(ctx){return ctx.label + ': ' + Number(ctx.raw || 0).toLocaleString();}}}}},
+    plugins:[donutCenterText]
+  });
+}
+function resetDashboard(){
+  rawRows = [];
+  records = [];
+  $('fileInput').value = '';
+  $('startDate').value = '';
+  $('endDate').value = '';
+  populateJx([]);
+  render();
+}
+function getSelectedJxs(){
+  const all = $('jxAll');
+  if(!all || all.checked) return [];
+  return [...document.querySelectorAll('.jx-option:checked')].map(cb=>cb.value);
+}
+function handleJxAll(){
+  const all = $('jxAll');
+  if(all && all.checked){
+    document.querySelectorAll('.jx-option').forEach(cb=>cb.checked=false);
+  }
+  render();
+}
+function handleJxOption(){
+  const selected = [...document.querySelectorAll('.jx-option:checked')];
+  const all = $('jxAll');
+  if(all) all.checked = selected.length === 0;
+  render();
+}
+function populateJx(data){
+  const selected = new Set(getSelectedJxs());
+  const jxs = [...new Set(data.map(r=>r.jx).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
+  const box = $('jxCheckboxes');
+  if(!box) return;
+  const hasSelected = jxs.some(j=>selected.has(j));
+  box.innerHTML = `<div class="check-row"><input type="checkbox" id="jxAll" ${hasSelected ? '' : 'checked'} onchange="handleJxAll()"><label for="jxAll">All JXs</label></div>` +
+    jxs.map((j,i)=>`<div class="check-row"><input type="checkbox" class="jx-option" id="jxOpt${i}" value="${esc(j)}" ${selected.has(j) ? 'checked' : ''} onchange="handleJxOption()"><label for="jxOpt${i}">${esc(j)}</label></div>`).join('');
+}
+function filtered(){
+  const s = $('startDate').value ? new Date($('startDate').value) : null;
+  const e = $('endDate').value ? new Date($('endDate').value) : null;
+  const selectedJxs = getSelectedJxs();
+  return records.filter(r=>{
+    if(selectedJxs.length && !selectedJxs.includes(r.jx)) return false;
+    if(s && (!r.date || r.date < s)) return false;
+    if(e){
+      const end = new Date(e);
+      end.setHours(23,59,59,999);
+      if(!r.date || r.date > end) return false;
+    }
+    return true;
+  });
+}
+function render(){
+  records = mapRows(rawRows);
+  if(rawRows.length) populateJx(records);
+  const data = filtered();
+  const total = data.reduce((a,r)=>a+r.volume,0);
+  const metric = getMetricStatus(total);
+
+  $('fte').textContent = FTE;
+  $('monthlyVolume').textContent = total.toLocaleString();
+  $('statusText').textContent = metric.text;
+  $('statusText').style.color = metric.color;
+  $('statusSub').textContent = total.toLocaleString() + ' documents';
+  $('statusPill').textContent = metric.text;
+  $('statusPill').className = 'status-pill ' + metric.cls;
+
+  const productivityPct = TARGET_VOLUME > 0 ? (total / TARGET_VOLUME) * 100 : 0;
+  $('monthlyProductivity').textContent = productivityPct.toFixed(1) + '% - ' + metric.text;
+  $('monthlyProductivityBar').style.width = Math.min(productivityPct,100) + '%';
+  $('monthlyProductivityBar').style.backgroundColor = metric.color;
+
+  const monthTotals = Array(12).fill(0);
+  data.forEach(r=>{ if(r.date) monthTotals[r.date.getMonth()] += r.volume; });
+  const monthsWithData = monthTotals.filter(x=>x>0).length || 1;
+  const avg = total / monthsWithData;
+  $('avgMonthly').textContent = Math.round(avg).toLocaleString();
+  $('avgMonthlyBar').style.width = Math.min((avg / TARGET_VOLUME) * 100,100) + '%';
+  $('avgMonthlyBar').style.backgroundColor = metric.color;
+
+  const outputPerFte = FTE > 0 ? total / FTE : 0;
+  $('outputFte').textContent = outputPerFte.toFixed(2);
+  $('fteBar').style.width = Math.min((outputPerFte / (TARGET_VOLUME / FTE)) * 100,100) + '%';
+  $('fteBar').style.backgroundColor = metric.color;
+
+  const currentVolume = total;
+  const remainingToReach = Math.max(ANNUAL_TARGET - currentVolume, 0);
+  const annualPercent = ANNUAL_TARGET > 0 ? (currentVolume / ANNUAL_TARGET) * 100 : 0;
+
+  monthlyChart.data.datasets[0].data = monthTotals;
+  monthlyChart.update();
+  goalChart.data.datasets[0].data = [total,TARGET_VOLUME];
+  goalChart.update();
+  annualDonutChart.data.datasets[0].data = [currentVolume, remainingToReach];
+  annualDonutChart.update();
+  $('annualCurrent').textContent = currentVolume.toLocaleString();
+  $('annualRemaining').textContent = remainingToReach.toLocaleString();
+  $('annualPercent').textContent = annualPercent.toFixed(1) + '%';
+
+  renderTables(data);
+}
+function renderTables(data){
+  const editors = {};
+  const invalidEditors = new Set(['accuracy','total','grand total','summary','average','target','remaining','monthly volume','volume','count','fte','specialist','editor','editor name','name']);
+
+  data.forEach(r=>{
+    const editor = String(r.editor || '').trim();
+    const key = editor.toLowerCase();
+    if(!editor || invalidEditors.has(key)) return;
+    editors[editor] = (editors[editor] || 0) + Number(r.volume || 0);
+  });
+
+  $('editorBody').innerHTML = Object.entries(editors)
+    .sort((a,b)=>a[0].localeCompare(b[0],undefined,{sensitivity:'base'}))
+    .map(([editor,volume])=>{
+      const target = editorTargetFor(editor);
+      const targetText = target > 0 ? target.toLocaleString() : '-';
+      const remaining = target > 0 ? (target - volume) : null;
+      const remainingText = remaining === null ? '-' : remaining.toLocaleString();
+      const remainingClass = remaining === null ? '' : remaining <= 0 ? 'remaining-ok' : 'remaining-due';
+      return `<tr><td>${esc(editor)}</td><td class="num">${volume.toLocaleString()}</td><td class="num">${targetText}</td><td class="num ${remainingClass}">${remainingText}</td></tr>`;
+    })
+    .join('') || '<tr><td colspan="4">No data loaded.</td></tr>';
+}
+async function readFile(file){
+  const buf = await file.arrayBuffer();
+  const lower = file.name.toLowerCase();
+  if(lower.endsWith('.csv')){
+    const text = new TextDecoder().decode(buf);
+    const wb = XLSX.read(text,{type:'string'});
+    let rows = [];
+    wb.SheetNames.forEach(s=>{ rows.push(...XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:'',raw:false})); });
+    return rows;
+  }
+  const wb = XLSX.read(buf,{type:'array',cellDates:true});
+  let rows = [];
+  wb.SheetNames.forEach(s=>{ rows.push(...XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:'',raw:false})); });
+  return rows;
+}
+$('fileInput').addEventListener('change',async e=>{
+  rawRows = [];
+  for(const file of [...e.target.files]){
+    try{ rawRows.push(...await readFile(file)); }
+    catch(err){ console.error(err); alert('Could not read ' + file.name); }
+  }
+  populateJx(mapRows(rawRows));
+  render();
+});
+function downloadReport(){
+  const data = filtered().map(r=>{
+    const target = editorTargetFor(r.editor);
+    return {
+      'Record ID':r.recordId,
+      'Document Title':r.docTitle,
+      'Case Number':r.caseNumber,
+      'File Date':r.fileDate,
+      'JX':r.jx,
+      'Folder':r.folder,
+      'Volume':r.volume,
+      'Editor':r.editor,
+      'Target': target > 0 ? target : '',
+      'Remaining': target > 0 ? (target - Number(r.volume || 0)) : ''
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Production Report');
+  XLSX.writeFile(wb,'Productivity_Report.xlsx');
+}
+document.addEventListener('DOMContentLoaded',()=>{initCharts();resetDashboard();});
+</script>
+</body>
+</html>
