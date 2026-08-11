@@ -116,6 +116,20 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
     </div>
   </div>
 </div>
+<div id="resetPasswordPanel" class="account-panel">
+  <div class="account-box">
+    <h3>Reset Password</h3>
+    <p style="color:#64748b;font-size:13px">Three unsuccessful login attempts were detected. Enter your registered email and choose a new password.</p>
+    <label>Registered Email</label><input id="resetEmail" type="email" autocomplete="email" placeholder="name@company.com">
+    <label>New Password</label><input id="resetPassword" type="password" autocomplete="new-password" placeholder="New password">
+    <label>Confirm New Password</label><input id="resetPasswordConfirm" type="password" autocomplete="new-password" placeholder="Confirm new password">
+    <div id="resetPasswordError" class="login-error"></div>
+    <div class="account-actions">
+      <button class="btn" type="button" onclick="resetPassword()">Reset Password</button>
+      <button class="btn" type="button" onclick="cancelPasswordReset()">Back to Login</button>
+    </div>
+  </div>
+</div>
 <div class="app locked" id="dashboardApp">
   <header class="header">
     <div class="title-wrap"><span class="icon">▥</span><h1>ILO.SMDEP Workload Volume Dashboard</h1></div>
@@ -124,7 +138,7 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
       <input id="fileInput" class="file" type="file" accept=".xlsx,.xls,.csv" multiple>
       <button class="btn" onclick="resetDashboard()">Reset</button>
       <button class="btn" onclick="downloadReport()">Export Report</button>
-      <button class="btn account-btn" onclick="openAccountPanel()">Edit Login</button>
+      <button class="btn account-btn" onclick="openAccountPanel()">Change Password</button>
       <button class="btn" onclick="logoutUser()">Log Out</button>
     </div>
   </header>
@@ -195,10 +209,33 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
 <script>
 const LOGIN_STORAGE_KEY = 'iloSmdepSecureAccountsV2';
 const DEFAULT_LOGINS = [
-  {email:'jane_velasquez@reedelsever.com',salt:'45c144fb8ab8a2f883d364bd889dd4bf',hash:'c5ef35afd2aa61ce602f32fdfbae5f043cf1bfd06d69673fee03ce99be375d39'},
+  {email:'jane_velasquez@reedelsevier.com',salt:'45c144fb8ab8a2f883d364bd889dd4bf',hash:'c5ef35afd2aa61ce602f32fdfbae5f043cf1bfd06d69673fee03ce99be375d39'},
   {email:'urieljustinemagbanua@reedelsevier.com',salt:'13d93781de10bf1bbd254f62ba340398',hash:'90467ad72e1bc4138a208d0600690de6ac50d35ad1451ec91728c74214f56fdb'},
   {email:'chrisjohntating@reedelsevier.com',salt:'780c06be40530dd2be5fe196b6bddbfb',hash:'fad94ad1cba5366354210a1daabeda3b06d264f74cad4a2abdf87e7d6f310301'}
 ];
+
+let failedLoginAttempts = 0;
+const MAX_LOGIN_ATTEMPTS = 3;
+
+function registerFailedLogin(){
+  failedLoginAttempts++;
+  const remaining = MAX_LOGIN_ATTEMPTS - failedLoginAttempts;
+  if(failedLoginAttempts >= MAX_LOGIN_ATTEMPTS){
+    failedLoginAttempts = 0;
+    $('loginError').textContent='';
+    $('loginError').classList.remove('clickable');
+    $('loginOverlay').style.display='none';
+    $('resetEmail').value=$('loginUsername').value.trim().toLowerCase();
+    $('resetPassword').value='';
+    $('resetPasswordConfirm').value='';
+    $('resetPasswordError').textContent='';
+    $('resetPasswordPanel').style.display='flex';
+    setTimeout(()=>$('resetPassword').focus(),0);
+  }else{
+    $('loginError').textContent='Incorrect email or password. ' + remaining + ' attempt' + (remaining===1?'':'s') + ' remaining. Click here to try again.';
+    $('loginError').classList.add('clickable');
+  }
+}
 
 async function sha256Hex(value){
   const bytes = new TextEncoder().encode(value);
@@ -225,13 +262,15 @@ async function loginUser(){
   const email = $('loginUsername').value.trim().toLowerCase();
   const password = $('loginPassword').value;
   const account = getLoginSettings().find(a=>a.email.toLowerCase()===email);
+
   if(!account){
-    $('loginError').textContent='Incorrect email or password. Click here to try again.';
-    $('loginError').classList.add('clickable');
+    registerFailedLogin();
     return;
   }
+
   const hash = await sha256Hex(account.salt + password);
   if(hash === account.hash){
+    failedLoginAttempts = 0;
     sessionStorage.setItem('iloSmdepAuthenticated','1');
     sessionStorage.setItem('iloSmdepAuthenticatedEmail', account.email);
     $('loginOverlay').style.display='none';
@@ -240,8 +279,7 @@ async function loginUser(){
     $('loginError').classList.remove('clickable');
     $('loginPassword').value='';
   }else{
-    $('loginError').textContent='Incorrect email or password. Click here to try again.';
-    $('loginError').classList.add('clickable');
+    registerFailedLogin();
   }
 }
 
@@ -250,6 +288,55 @@ function retryLogin(){
   $('loginError').classList.remove('clickable');
   $('loginPassword').value='';
   $('loginPassword').focus();
+}
+
+async function resetPassword(){
+  const email = $('resetEmail').value.trim().toLowerCase();
+  const password = $('resetPassword').value;
+  const confirm = $('resetPasswordConfirm').value;
+  const error = $('resetPasswordError');
+  error.textContent='';
+
+  if(!email || !password){
+    error.textContent='Registered email and new password are required.';
+    return;
+  }
+  if(password.length < 8){
+    error.textContent='New password must be at least 8 characters.';
+    return;
+  }
+  if(password !== confirm){
+    error.textContent='New passwords do not match.';
+    return;
+  }
+
+  const accounts = getLoginSettings();
+  const index = accounts.findIndex(a=>a.email.toLowerCase()===email);
+  if(index < 0){
+    error.textContent='This email is not registered.';
+    return;
+  }
+
+  const salt = randomSalt();
+  const hash = await sha256Hex(salt + password);
+  accounts[index] = {email:accounts[index].email, salt, hash};
+  localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify(accounts));
+
+  $('resetPasswordPanel').style.display='none';
+  $('loginOverlay').style.display='flex';
+  $('loginUsername').value=email;
+  $('loginPassword').value='';
+  $('loginError').textContent='Password reset successfully. Log in with your new password.';
+  $('loginError').classList.remove('clickable');
+  setTimeout(()=>$('loginPassword').focus(),0);
+}
+
+function cancelPasswordReset(){
+  $('resetPasswordPanel').style.display='none';
+  $('loginOverlay').style.display='flex';
+  $('loginPassword').value='';
+  $('loginError').textContent='';
+  $('loginError').classList.remove('clickable');
 }
 
 function logoutUser(){
@@ -288,7 +375,10 @@ async function createAccount(){
   closeCreateAccountPanel();
   $('loginUsername').value=email;
   $('loginPassword').value='';
-  $('loginError').textContent='Account created. You can now log in.';
+  $('loginError').textContent='';
+  $('loginError').classList.remove('clickable');
+  alert('Account created successfully!');
+  setTimeout(()=>$('loginPassword').focus(),0);
 }
 
 function openAccountPanel(){
