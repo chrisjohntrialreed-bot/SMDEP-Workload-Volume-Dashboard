@@ -72,11 +72,37 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
 .reph-subtitle{font-size:18px;font-weight:900;color:var(--navy2);letter-spacing:.5px;margin-top:3px}
 .reph-tagline{font-size:11px;color:#475569;font-weight:700;margin-top:4px;text-transform:uppercase}
 
+
+.login-overlay{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#2579e7,#f19306);display:flex;align-items:center;justify-content:center;padding:20px}
+.login-box{width:min(420px,100%);background:#fff;border-radius:16px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center}
+.login-box h2{margin:0 0 6px;color:#20364d}.login-box p{margin:0 0 20px;color:#64748b}.login-box input{width:100%;padding:12px;margin:7px 0;border:1px solid #cfd6df;border-radius:8px;font-size:15px}.login-box button{width:100%;margin-top:10px;padding:12px;border:0;border-radius:8px;background:#2579e7;color:#fff;font-weight:800;cursor:pointer}.login-box button:hover{background:#1d63c2}.login-error{min-height:20px;margin-top:8px;color:#dc2626;font-size:13px;font-weight:700}.account-btn{background:#fff!important;color:#20364d!important}.account-panel{position:fixed;z-index:10000;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:20px}.account-box{width:min(440px,100%);background:#fff;border-radius:14px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)}.account-box h3{margin-top:0}.account-box input{width:100%;padding:10px;margin:6px 0 12px;border:1px solid #cfd6df;border-radius:7px}.account-actions{display:flex;gap:10px}.account-actions button{flex:1}.app.locked{display:none}
 @media(max-width:900px){.grid,.kpis{grid-template-columns:1fr}.header{display:block}.header h1{font-size:24px}.actions{margin-top:12px}.card .value{font-size:34px}.top-controls{flex-direction:column;align-items:stretch}.reph-art{width:100%;min-width:0}.control{width:100%}}
 </style>
 </head>
 <body>
-<div class="app">
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-box">
+    <div class="reph-mark">▥</div>
+    <h2>REPH ILO SMDEP Login</h2>
+    <p>Sign in to open the productivity dashboard.</p>
+    <input id="loginUsername" type="email" autocomplete="username" placeholder="Email">
+    <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password">
+    <button type="button" onclick="loginUser()">Log In</button>
+    <div id="loginError" class="login-error"></div>
+  </div>
+</div>
+<div id="accountPanel" class="account-panel">
+  <div class="account-box">
+    <h3>Login Accounts</h3>
+    <label>Email</label><input id="newUsername" type="email">
+    <label>New Password</label><input id="newPassword" type="password">
+    <div class="account-actions">
+      <button class="btn" type="button" onclick="saveLoginSettings()">Save</button>
+      <button class="btn" type="button" onclick="closeAccountPanel()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div class="app locked" id="dashboardApp">
   <header class="header">
     <div class="title-wrap"><span class="icon">▥</span><h1>ILO.SMDEP Workload Volume Dashboard</h1></div>
     <div class="actions">
@@ -84,6 +110,8 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
       <input id="fileInput" class="file" type="file" accept=".xlsx,.xls,.csv" multiple>
       <button class="btn" onclick="resetDashboard()">Reset</button>
       <button class="btn" onclick="downloadReport()">Export Report</button>
+      <button class="btn account-btn" onclick="openAccountPanel()">Edit Login</button>
+      <button class="btn" onclick="logoutUser()">Log Out</button>
     </div>
   </header>
 
@@ -151,6 +179,103 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
   </div>
 </div>
 <script>
+const LOGIN_STORAGE_KEY = 'iloSmdepLoginAccounts';
+const DEFAULT_LOGINS = [
+  {email:'jane_velasquez@reedelsever.com', password:'janevelasquez94'},
+  {email:'urieljustinemagbanua@reedelsevier.com', password:'uriel04'},
+  {email:'chrisjohntating@reedelsevier.com', password:'cjtating02'}
+];
+
+function getLoginSettings(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(LOGIN_STORAGE_KEY) || 'null');
+    if(Array.isArray(saved) && saved.length){
+      return saved.filter(a => a && a.email && a.password);
+    }
+  }catch(e){
+    console.error('Could not read saved login accounts:', e);
+  }
+  return DEFAULT_LOGINS.map(a => ({...a}));
+}
+
+function loginUser(){
+  const accounts = getLoginSettings();
+  const email = $('loginUsername').value.trim().toLowerCase();
+  const password = $('loginPassword').value;
+  const account = accounts.find(a =>
+    String(a.email).trim().toLowerCase() === email &&
+    String(a.password) === password
+  );
+
+  if(account){
+    sessionStorage.setItem('iloSmdepAuthenticated','1');
+    sessionStorage.setItem('iloSmdepAuthenticatedEmail', account.email);
+    $('loginOverlay').style.display='none';
+    $('dashboardApp').classList.remove('locked');
+    $('loginError').textContent='';
+  }else{
+    $('loginError').textContent='Incorrect email or password.';
+  }
+}
+
+function logoutUser(){
+  sessionStorage.removeItem('iloSmdepAuthenticated');
+  sessionStorage.removeItem('iloSmdepAuthenticatedEmail');
+  $('dashboardApp').classList.add('locked');
+  $('loginOverlay').style.display='flex';
+  $('loginPassword').value='';
+}
+
+function openAccountPanel(){
+  const currentEmail = sessionStorage.getItem('iloSmdepAuthenticatedEmail') || '';
+  const accounts = getLoginSettings();
+  const account = accounts.find(a =>
+    String(a.email).trim().toLowerCase() === currentEmail.toLowerCase()
+  ) || accounts[0];
+
+  $('newUsername').value = account ? account.email : '';
+  $('newPassword').value = account ? account.password : '';
+  $('accountPanel').style.display='flex';
+}
+
+function closeAccountPanel(){
+  $('accountPanel').style.display='none';
+}
+
+function saveLoginSettings(){
+  const oldEmail = sessionStorage.getItem('iloSmdepAuthenticatedEmail') || '';
+  const email = $('newUsername').value.trim().toLowerCase();
+  const password = $('newPassword').value;
+
+  if(!email || !password){
+    alert('Email and password cannot be empty.');
+    return;
+  }
+
+  const accounts = getLoginSettings();
+  let index = accounts.findIndex(a =>
+    String(a.email).trim().toLowerCase() === oldEmail.toLowerCase()
+  );
+  if(index < 0) index = 0;
+
+  accounts[index] = {email, password};
+  localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify(accounts));
+  sessionStorage.setItem('iloSmdepAuthenticatedEmail', email);
+  closeAccountPanel();
+  alert('Login email and password updated.');
+}
+
+function initializeLogin(){
+  if(sessionStorage.getItem('iloSmdepAuthenticated')==='1'){
+    $('loginOverlay').style.display='none';
+    $('dashboardApp').classList.remove('locked');
+  }
+  $('loginUsername').addEventListener('keydown',e=>{if(e.key==='Enter') loginUser();});
+  $('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter') loginUser();});
+}
+
+
+//----Main DashBoard----from 156 to 162//
 const FTE = 22;
 const TARGET_VOLUME = 57200;
 const ANNUAL_TARGET = 400000;
@@ -171,7 +296,7 @@ let monthlyChart = null;
 let goalChart = null;
 let annualDonutChart = null;
 const $ = id => document.getElementById(id);
-
+//-----Reading Different Spearsheet Column Names------from 177 to 180//
 function norm(s){return String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g,'');}
 function first(row,names){
   const keys = Object.keys(row || {});
@@ -203,6 +328,7 @@ function parseDate(v){
   const dt = new Date(s);
   return isNaN(dt) ? null : dt;
 }
+//----Detecting Jurisdiction or JX----- 209 to 218//
 function detectJx(row){
   const direct = first(row,['JX','Jurisdiction','County','Court County','Location']);
   const text = (direct + ' ' + JSON.stringify(row)).toLowerCase();
@@ -216,6 +342,7 @@ function detectJx(row){
   for(const [p,val] of patterns){ if(text.includes(p)) return val; }
   return direct ? String(direct).trim().replace(/\s+/g,'_') : 'Unknown';
 }
+//------Removing Totals and Summary Rows-----from 223 to 230//
 function isSummaryRow(row){
   const text = Object.values(row || {}).join(' ').toLowerCase().trim();
   const marker = String(first(row,['FTE','Specialist','Editor','Editor Name','User','Employee','Name','Document Title','Title']) || '').toLowerCase().trim();
@@ -224,6 +351,7 @@ function isSummaryRow(row){
   if(/^total\b|grand total|summary row|overall total/.test(text)) return true;
   return false;
 }
+//-----Converting Uploaded Rows Into Records----- from 231 to 251//
 function mapRows(rows){
   return rows.filter(row=>!isSummaryRow(row)).map((row,i)=>{
     const fileDate = first(row,['File Date','Date','Completed Date','Production Date','Process Date']);
@@ -249,6 +377,7 @@ function getMetricStatus(volume){
   if(volume === TARGET_VOLUME) return {text:'On Target', color:'#eab308', cls:'status-on'};
   return {text:'Above Target', color:'#16a34a', cls:'status-above'};
 }
+//------Charts-----from 258 to 280//
 const donutCenterText = {
   id:'donutCenterText',
   afterDraw(chart){
@@ -330,6 +459,7 @@ function populateJx(data){
   box.innerHTML = `<div class="check-row"><input type="checkbox" id="jxAll" ${hasSelected ? '' : 'checked'} onchange="handleJxAll()"><label for="jxAll">All JXs</label></div>` +
     jxs.map((j,i)=>`<div class="check-row"><input type="checkbox" class="jx-option" id="jxOpt${i}" value="${esc(j)}" ${selected.has(j) ? 'checked' : ''} onchange="handleJxOption()"><label for="jxOpt${i}">${esc(j)}</label></div>`).join('');
 }
+//------Date and Jx Filtering------ from 339 to 353//
 function filtered(){
   const s = $('startDate').value ? new Date($('startDate').value) : null;
   const e = $('endDate').value ? new Date($('endDate').value) : null;
@@ -345,6 +475,7 @@ function filtered(){
     return true;
   });
 }
+//-------Heart of the Dashboard-----356 to 405//
 function render(){
   records = mapRows(rawRows);
   if(rawRows.length) populateJx(records);
@@ -365,6 +496,7 @@ function render(){
   $('monthlyProductivityBar').style.width = Math.min(productivityPct,100) + '%';
   $('monthlyProductivityBar').style.backgroundColor = metric.color;
 
+//-----Average Monthly Volume and Output per FTE-------from 376 to  405// 
   const monthTotals = Array(12).fill(0);
   data.forEach(r=>{ if(r.date) monthTotals[r.date.getMonth()] += r.volume; });
   const monthsWithData = monthTotals.filter(x=>x>0).length || 1;
@@ -394,6 +526,7 @@ function render(){
 
   renderTables(data);
 }
+//------Individual Editor Productivity---- from 407 to 429//
 function renderTables(data){
   const editors = {};
   const invalidEditors = new Set(['accuracy','total','grand total','summary','average','target','remaining','monthly volume','volume','count','fte','specialist','editor','editor name','name']);
@@ -417,6 +550,7 @@ function renderTables(data){
     })
     .join('') || '<tr><td colspan="4">No data loaded.</td></tr>';
 }
+//------excel reading-------from 431 to 446//
 async function readFile(file){
   const buf = await file.arrayBuffer();
   const lower = file.name.toLowerCase();
@@ -427,20 +561,25 @@ async function readFile(file){
     wb.SheetNames.forEach(s=>{ rows.push(...XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:'',raw:false})); });
     return rows;
   }
+  
   const wb = XLSX.read(buf,{type:'array',cellDates:true});
   let rows = [];
   wb.SheetNames.forEach(s=>{ rows.push(...XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:'',raw:false})); });
   return rows;
 }
+
+//-----Uploading excel reader------ from 449 to 458//
 $('fileInput').addEventListener('change',async e=>{
   rawRows = [];
   for(const file of [...e.target.files]){
     try{ rawRows.push(...await readFile(file)); }
     catch(err){ console.error(err); alert('Could not read ' + file.name); }
+
   }
   populateJx(mapRows(rawRows));
   render();
 });
+//----Exporting the Report---- from 460 to 474//
 function downloadReport(){
   const data = filtered().map(r=>{
     const target = editorTargetFor(r.editor);
@@ -462,7 +601,7 @@ function downloadReport(){
   XLSX.utils.book_append_sheet(wb,ws,'Production Report');
   XLSX.writeFile(wb,'Productivity_Report.xlsx');
 }
-document.addEventListener('DOMContentLoaded',()=>{initCharts();resetDashboard();});
+document.addEventListener('DOMContentLoaded',()=>{initializeLogin();initCharts();resetDashboard();});
 </script>
 </body>
 </html>
