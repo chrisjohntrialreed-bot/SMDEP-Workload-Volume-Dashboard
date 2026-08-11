@@ -75,7 +75,7 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
 
 .login-overlay{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#2579e7,#f19306);display:flex;align-items:center;justify-content:center;padding:20px}
 .login-box{width:min(420px,100%);background:#fff;border-radius:16px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center}
-.login-box h2{margin:0 0 6px;color:#20364d}.login-box p{margin:0 0 20px;color:#64748b}.login-box input{width:100%;padding:12px;margin:7px 0;border:1px solid #cfd6df;border-radius:8px;font-size:15px}.login-box button{width:100%;margin-top:10px;padding:12px;border:0;border-radius:8px;background:#2579e7;color:#fff;font-weight:800;cursor:pointer}.login-box button:hover{background:#1d63c2}.login-error{min-height:20px;margin-top:8px;color:#dc2626;font-size:13px;font-weight:700}.account-btn{background:#fff!important;color:#20364d!important}.account-panel{position:fixed;z-index:10000;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:20px}.account-box{width:min(440px,100%);background:#fff;border-radius:14px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)}.account-box h3{margin-top:0}.account-box input{width:100%;padding:10px;margin:6px 0 12px;border:1px solid #cfd6df;border-radius:7px}.account-actions{display:flex;gap:10px}.account-actions button{flex:1}.app.locked{display:none}
+.login-box h2{margin:0 0 6px;color:#20364d}.login-box p{margin:0 0 20px;color:#64748b}.login-box input{width:100%;padding:12px;margin:7px 0;border:1px solid #cfd6df;border-radius:8px;font-size:15px}.login-box button{width:100%;margin-top:10px;padding:12px;border:0;border-radius:8px;background:#2579e7;color:#fff;font-weight:800;cursor:pointer}.login-box button:hover{background:#1d63c2}.create-account-login-btn{background:#f19306!important}.create-account-login-btn:hover{background:#d77f00!important}.login-error{min-height:20px;margin-top:8px;color:#dc2626;font-size:13px;font-weight:700}.account-btn{background:#fff!important;color:#20364d!important}.account-panel{position:fixed;z-index:10000;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:20px}.account-box{width:min(440px,100%);background:#fff;border-radius:14px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)}.account-box h3{margin-top:0}.account-box input{width:100%;padding:10px;margin:6px 0 12px;border:1px solid #cfd6df;border-radius:7px}.account-actions{display:flex;gap:10px}.account-actions button{flex:1}.app.locked{display:none}
 @media(max-width:900px){.grid,.kpis{grid-template-columns:1fr}.header{display:block}.header h1{font-size:24px}.actions{margin-top:12px}.card .value{font-size:34px}.top-controls{flex-direction:column;align-items:stretch}.reph-art{width:100%;min-width:0}.control{width:100%}}
 </style>
 </head>
@@ -88,6 +88,7 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
     <input id="loginUsername" type="email" autocomplete="username" placeholder="Email">
     <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password">
     <button type="button" onclick="loginUser()">Log In</button>
+    <button type="button" class="create-account-login-btn" onclick="openCreateAccountPanel()">Create Account</button>
     <div id="loginError" class="login-error"></div>
   </div>
 </div>
@@ -102,6 +103,19 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
     </div>
   </div>
 </div>
+<div id="createAccountPanel" class="account-panel">
+  <div class="account-box">
+    <h3>Create Account</h3>
+    <label>Email</label><input id="createEmail" type="email" autocomplete="email" placeholder="name@company.com">
+    <label>Password</label><input id="createPassword" type="password" autocomplete="new-password" placeholder="Password">
+    <label>Confirm Password</label><input id="confirmPassword" type="password" autocomplete="new-password" placeholder="Confirm password">
+    <div id="createAccountError" class="login-error"></div>
+    <div class="account-actions">
+      <button class="btn" type="button" onclick="createAccount()">Create Account</button>
+      <button class="btn" type="button" onclick="closeCreateAccountPanel()">Cancel</button>
+    </div>
+  </div>
+</div>
 <div class="app locked" id="dashboardApp">
   <header class="header">
     <div class="title-wrap"><span class="icon">▥</span><h1>ILO.SMDEP Workload Volume Dashboard</h1></div>
@@ -110,7 +124,7 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
       <input id="fileInput" class="file" type="file" accept=".xlsx,.xls,.csv" multiple>
       <button class="btn" onclick="resetDashboard()">Reset</button>
       <button class="btn" onclick="downloadReport()">Export Report</button>
-      <button class="btn account-btn" onclick="openAccountPanel()">Change Password</button>
+      <button class="btn account-btn" onclick="openAccountPanel()">Edit Login</button>
       <button class="btn" onclick="logoutUser()">Log Out</button>
     </div>
   </header>
@@ -179,40 +193,50 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
   </div>
 </div>
 <script>
-const LOGIN_STORAGE_KEY = 'iloSmdepLoginAccounts';
+const LOGIN_STORAGE_KEY = 'iloSmdepSecureAccountsV2';
 const DEFAULT_LOGINS = [
-  {email:'jane_velasquez@reedelsever.com', password:'janevelasquez94'},
-  {email:'urieljustinemagbanua@reedelsevier.com', password:'uriel04'},
-  {email:'chrisjohntating@reedelsevier.com', password:'cjtating02'}
+  {email:'jane_velasquez@reedelsever.com',salt:'45c144fb8ab8a2f883d364bd889dd4bf',hash:'c5ef35afd2aa61ce602f32fdfbae5f043cf1bfd06d69673fee03ce99be375d39'},
+  {email:'urieljustinemagbanua@reedelsevier.com',salt:'13d93781de10bf1bbd254f62ba340398',hash:'90467ad72e1bc4138a208d0600690de6ac50d35ad1451ec91728c74214f56fdb'},
+  {email:'chrisjohntating@reedelsevier.com',salt:'780c06be40530dd2be5fe196b6bddbfb',hash:'fad94ad1cba5366354210a1daabeda3b06d264f74cad4a2abdf87e7d6f310301'}
 ];
+
+async function sha256Hex(value){
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function randomSalt(){
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
 
 function getLoginSettings(){
   try{
     const saved = JSON.parse(localStorage.getItem(LOGIN_STORAGE_KEY) || 'null');
-    if(Array.isArray(saved) && saved.length){
-      return saved.filter(a => a && a.email && a.password);
-    }
-  }catch(e){
-    console.error('Could not read saved login accounts:', e);
-  }
-  return DEFAULT_LOGINS.map(a => ({...a}));
+    if(Array.isArray(saved)) return saved.filter(a=>a && a.email && a.salt && a.hash);
+  }catch(e){ console.error('Could not read accounts:', e); }
+  localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify(DEFAULT_LOGINS));
+  return DEFAULT_LOGINS.map(a=>({...a}));
 }
 
-function loginUser(){
-  const accounts = getLoginSettings();
+async function loginUser(){
   const email = $('loginUsername').value.trim().toLowerCase();
   const password = $('loginPassword').value;
-  const account = accounts.find(a =>
-    String(a.email).trim().toLowerCase() === email &&
-    String(a.password) === password
-  );
-
-  if(account){
+  const account = getLoginSettings().find(a=>a.email.toLowerCase()===email);
+  if(!account){
+    $('loginError').textContent='Incorrect email or password.';
+    return;
+  }
+  const hash = await sha256Hex(account.salt + password);
+  if(hash === account.hash){
     sessionStorage.setItem('iloSmdepAuthenticated','1');
     sessionStorage.setItem('iloSmdepAuthenticatedEmail', account.email);
     $('loginOverlay').style.display='none';
     $('dashboardApp').classList.remove('locked');
     $('loginError').textContent='';
+    $('loginPassword').value='';
   }else{
     $('loginError').textContent='Incorrect email or password.';
   }
@@ -226,46 +250,68 @@ function logoutUser(){
   $('loginPassword').value='';
 }
 
-function openAccountPanel(){
-  const currentEmail = sessionStorage.getItem('iloSmdepAuthenticatedEmail') || '';
-  const accounts = getLoginSettings();
-  const account = accounts.find(a =>
-    String(a.email).trim().toLowerCase() === currentEmail.toLowerCase()
-  ) || accounts[0];
+function openCreateAccountPanel(){
+  $('createEmail').value='';
+  $('createPassword').value='';
+  $('confirmPassword').value='';
+  $('createAccountError').textContent='';
+  $('createAccountPanel').style.display='flex';
+}
+function closeCreateAccountPanel(){ $('createAccountPanel').style.display='none'; }
 
-  $('newUsername').value = account ? account.email : '';
-  $('newPassword').value = account ? account.password : '';
+async function createAccount(){
+  const email = $('createEmail').value.trim().toLowerCase();
+  const password = $('createPassword').value;
+  const confirm = $('confirmPassword').value;
+  const error = $('createAccountError');
+  error.textContent='';
+  if(!email || !password){ error.textContent='Email and password are required.'; return; }
+  if(!/^\S+@\S+\.\S+$/.test(email)){ error.textContent='Enter a valid email address.'; return; }
+  if(password.length < 8){ error.textContent='Password must be at least 8 characters.'; return; }
+  if(password !== confirm){ error.textContent='Passwords do not match.'; return; }
+  const accounts = getLoginSettings();
+  if(accounts.some(a=>a.email.toLowerCase()===email)){ error.textContent='An account with this email already exists.'; return; }
+  const salt = randomSalt();
+  const hash = await sha256Hex(salt + password);
+  accounts.push({email, salt, hash});
+  localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify(accounts));
+  closeCreateAccountPanel();
+  $('loginUsername').value=email;
+  $('loginPassword').value='';
+  $('loginError').textContent='Account created. You can now log in.';
+}
+
+function openAccountPanel(){
+  const email = sessionStorage.getItem('iloSmdepAuthenticatedEmail') || '';
+  $('newUsername').value=email;
+  $('newPassword').value='';
   $('accountPanel').style.display='flex';
 }
+function closeAccountPanel(){ $('accountPanel').style.display='none'; }
 
-function closeAccountPanel(){
-  $('accountPanel').style.display='none';
-}
-
-function saveLoginSettings(){
+async function saveLoginSettings(){
   const oldEmail = sessionStorage.getItem('iloSmdepAuthenticatedEmail') || '';
   const email = $('newUsername').value.trim().toLowerCase();
   const password = $('newPassword').value;
-
-  if(!email || !password){
-    alert('Email and password cannot be empty.');
-    return;
-  }
-
+  if(!email || !password){ alert('Email and a new password are required.'); return; }
+  if(password.length < 8){ alert('Password must be at least 8 characters.'); return; }
   const accounts = getLoginSettings();
-  let index = accounts.findIndex(a =>
-    String(a.email).trim().toLowerCase() === oldEmail.toLowerCase()
-  );
-  if(index < 0) index = 0;
-
-  accounts[index] = {email, password};
+  const index = accounts.findIndex(a=>a.email.toLowerCase()===oldEmail.toLowerCase());
+  if(index < 0){ alert('Current account was not found.'); return; }
+  if(accounts.some((a,i)=>i!==index && a.email.toLowerCase()===email)){
+    alert('That email is already registered.'); return;
+  }
+  const salt = randomSalt();
+  const hash = await sha256Hex(salt + password);
+  accounts[index] = {email, salt, hash};
   localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify(accounts));
   sessionStorage.setItem('iloSmdepAuthenticatedEmail', email);
   closeAccountPanel();
-  alert('Login email and password updated.');
+  alert('Login email and password updated securely.');
 }
 
 function initializeLogin(){
+  getLoginSettings();
   if(sessionStorage.getItem('iloSmdepAuthenticated')==='1'){
     $('loginOverlay').style.display='none';
     $('dashboardApp').classList.remove('locked');
@@ -273,7 +319,6 @@ function initializeLogin(){
   $('loginUsername').addEventListener('keydown',e=>{if(e.key==='Enter') loginUser();});
   $('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter') loginUser();});
 }
-
 
 //----Main DashBoard----from 156 to 162//
 const FTE = 22;
