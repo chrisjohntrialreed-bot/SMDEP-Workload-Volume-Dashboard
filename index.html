@@ -75,7 +75,7 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
 
 .login-overlay{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#2579e7,#f19306);display:flex;align-items:center;justify-content:center;padding:20px}
 .login-box{width:min(420px,100%);background:#fff;border-radius:16px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center}
-.login-box h2{margin:0 0 6px;color:#20364d}.login-box p{margin:0 0 20px;color:#64748b}.login-box input{width:100%;padding:12px;margin:7px 0;border:1px solid #cfd6df;border-radius:8px;font-size:15px}.login-box button{width:100%;margin-top:10px;padding:12px;border:0;border-radius:8px;background:#2579e7;color:#fff;font-weight:800;cursor:pointer}.login-box button:hover{background:#1d63c2}.create-account-login-btn{background:#f19306!important}.create-account-login-btn:hover{background:#d77f00!important}.login-error{min-height:20px;margin-top:8px;color:#dc2626;font-size:13px;font-weight:700}.account-btn{background:#fff!important;color:#20364d!important}.account-panel{position:fixed;z-index:10000;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:20px}.account-box{width:min(440px,100%);background:#fff;border-radius:14px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)}.account-box h3{margin-top:0}.account-box input{width:100%;padding:10px;margin:6px 0 12px;border:1px solid #cfd6df;border-radius:7px}.account-actions{display:flex;gap:10px}.account-actions button{flex:1}.app.locked{display:none}
+.login-box h2{margin:0 0 6px;color:#20364d}.login-box p{margin:0 0 20px;color:#64748b}.login-box input{width:100%;padding:12px;margin:7px 0;border:1px solid #cfd6df;border-radius:8px;font-size:15px}.login-box button{width:100%;margin-top:10px;padding:12px;border:0;border-radius:8px;background:#2579e7;color:#fff;font-weight:800;cursor:pointer}.login-box button:hover{background:#1d63c2}.create-account-login-btn{background:#f19306!important}.create-account-login-btn:hover{background:#d77f00!important}.login-error{min-height:20px;margin-top:8px;color:#dc2626;font-size:13px;font-weight:700}.login-error.clickable{cursor:pointer;text-decoration:underline;text-underline-offset:3px}.login-error.clickable:hover{color:#b91c1c}.account-btn{background:#fff!important;color:#20364d!important}.account-panel{position:fixed;z-index:10000;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:20px}.account-box{width:min(440px,100%);background:#fff;border-radius:14px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)}.account-box h3{margin-top:0}.account-box input{width:100%;padding:10px;margin:6px 0 12px;border:1px solid #cfd6df;border-radius:7px}.account-actions{display:flex;gap:10px}.account-actions button{flex:1}.app.locked{display:none}
 @media(max-width:900px){.grid,.kpis{grid-template-columns:1fr}.header{display:block}.header h1{font-size:24px}.actions{margin-top:12px}.card .value{font-size:34px}.top-controls{flex-direction:column;align-items:stretch}.reph-art{width:100%;min-width:0}.control{width:100%}}
 </style>
 </head>
@@ -89,7 +89,7 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
     <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password">
     <button type="button" onclick="loginUser()">Log In</button>
     <button type="button" class="create-account-login-btn" onclick="openCreateAccountPanel()">Create Account</button>
-    <div id="loginError" class="login-error"></div>
+    <div id="loginError" class="login-error" onclick="retryLogin()" role="button" tabindex="0"></div>
   </div>
 </div>
 <div id="accountPanel" class="account-panel">
@@ -124,7 +124,7 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
       <input id="fileInput" class="file" type="file" accept=".xlsx,.xls,.csv" multiple>
       <button class="btn" onclick="resetDashboard()">Reset</button>
       <button class="btn" onclick="downloadReport()">Export Report</button>
-      <button class="btn account-btn" onclick="openAccountPanel()"> Change Password </button>
+      <button class="btn account-btn" onclick="openAccountPanel()">Edit Login</button>
       <button class="btn" onclick="logoutUser()">Log Out</button>
     </div>
   </header>
@@ -226,7 +226,8 @@ async function loginUser(){
   const password = $('loginPassword').value;
   const account = getLoginSettings().find(a=>a.email.toLowerCase()===email);
   if(!account){
-    $('loginError').textContent='Incorrect email or password.';
+    $('loginError').textContent='Incorrect email or password. Click here to try again.';
+    $('loginError').classList.add('clickable');
     return;
   }
   const hash = await sha256Hex(account.salt + password);
@@ -236,10 +237,19 @@ async function loginUser(){
     $('loginOverlay').style.display='none';
     $('dashboardApp').classList.remove('locked');
     $('loginError').textContent='';
+    $('loginError').classList.remove('clickable');
     $('loginPassword').value='';
   }else{
-    $('loginError').textContent='Incorrect email or password.';
+    $('loginError').textContent='Incorrect email or password. Click here to try again.';
+    $('loginError').classList.add('clickable');
   }
+}
+
+function retryLogin(){
+  $('loginError').textContent='';
+  $('loginError').classList.remove('clickable');
+  $('loginPassword').value='';
+  $('loginPassword').focus();
 }
 
 function logoutUser(){
@@ -318,6 +328,7 @@ function initializeLogin(){
   }
   $('loginUsername').addEventListener('keydown',e=>{if(e.key==='Enter') loginUser();});
   $('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter') loginUser();});
+  $('loginError').addEventListener('keydown',e=>{if(e.key==='Enter' || e.key===' ') retryLogin();});
 }
 
 //----Main DashBoard----from 156 to 162//
