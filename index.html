@@ -124,7 +124,7 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
       <input id="fileInput" class="file" type="file" accept=".xlsx,.xls,.csv" multiple>
       <button class="btn" onclick="resetDashboard()">Reset</button>
       <button class="btn" onclick="downloadReport()">Export Report</button>
-      <button class="btn account-btn" onclick="openAccountPanel()">Edit Login</button>
+      <button class="btn account-btn" onclick="openAccountPanel()">Change Password</button>
       <button class="btn" onclick="logoutUser()">Log Out</button>
     </div>
   </header>
@@ -193,12 +193,11 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
   </div>
 </div>
 <script>
-const LOGIN_STORAGE_KEY = 'iloSmdepSecureAccountsV2';
+const LOGIN_STORAGE_KEY = 'iloSmdepSecureAccountsV3';
 const DEFAULT_LOGINS = [
-  {email:'jane_velasquez@reedelsever.com',salt:'45c144fb8ab8a2f883d364bd889dd4bf',hash:'c5ef35afd2aa61ce602f32fdfbae5f043cf1bfd06d69673fee03ce99be375d39'},
-  {email:'urieljustinemagbanua@reedelsevier.com',salt:'13d93781de10bf1bbd254f62ba340398',hash:'90467ad72e1bc4138a208d0600690de6ac50d35ad1451ec91728c74214f56fdb'},
-  {email:'chrisjohntating@reedelsevier.com',salt:'780c06be40530dd2be5fe196b6bddbfb',hash:'fad94ad1cba5366354210a1daabeda3b06d264f74cad4a2abdf87e7d6f310301'}
-  
+  {email:'maryjanevelasquez@reedelsevier.com',salt:'b7a15e930adf7ccd1df291392edde384',hash:'4b820e1090e5eb27a00e168bac957329273ec2834cd56ff3f4b8c8544af68dc4'},
+  {email:'urieljustinemagbanua@reedelsevier.com',salt:'fb6185ba447dc070d8e443ea2bacf355',hash:'bc6ea95f78df18cd991a234cbb03c0eb5c885fa40fe5b0298563b88e3b744ac2'},
+  {email:'chrisjohntating@reedelsevier.com',salt:'9377f5cca4282d52073fc2ef43c34558',hash:'70646316e4e39eabf069b5a3a6b4e97d5dd68d547221a9599804f341bf99c5d5'}
 ];
 
 let failedLoginAttempts = 0;
@@ -380,8 +379,8 @@ function initializeLogin(){
 const FTE = 22;
 const TARGET_VOLUME = 57200;
 const ANNUAL_TARGET = 400000;
-const SPECIAL_EDITOR_TARGET = 1575;
-const DEFAULT_EDITOR_TARGET = 3150;
+const SPECIAL_EDITOR_TARGET = 1418;
+const DEFAULT_EDITOR_TARGET = 2835;
 const SPECIAL_EDITORS = ['tiron','baricuatro','hervias','rebua','sucatron','gregorio'];
 function isSpecialEditor(name){
   const text = String(name || '').toLowerCase();
