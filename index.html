@@ -146,6 +146,8 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
     </div>
   </div>
 
+  <div id="uploadStatus" role="status" aria-live="polite" style="margin:10px 0;padding:10px 14px;border:1px solid #dbeafe;border-radius:8px;color:#334155;background:#f8fbff">Upload an Excel or CSV file to begin.</div>
+  <div id="sheetSelectorWrap" style="display:none;margin:10px 0;padding:12px;border:1px solid #dbeafe;border-radius:8px"><label for="sheetSelector"><strong>Choose the production worksheet</strong></label><select id="sheetSelector" style="width:100%;padding:9px;margin-top:6px" onchange="selectProductionSheet()"></select><small id="sheetHint" style="display:block;margin-top:5px;color:#64748b">Choose the worksheet containing editor names and production counts.</small></div>
   <section class="kpis">
     <div class="card"><h3>Full-Time</h3><div id="fte" class="value">22</div></div>
     <div class="card"><h3>Monthly Volume</h3><div id="monthlyVolume" class="value">0</div><small>Filtered total</small></div>
@@ -397,6 +399,8 @@ function editorTargetFor(name){
 }
 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 let rawRows = [];
+let uploadedSheets = [];
+let selectedSheetIndex = -1;
 let records = [];
 let monthlyChart = null;
 let goalChart = null;
@@ -405,11 +409,10 @@ const $ = id => document.getElementById(id);
 //-----Reading Different Spearsheet Column Names------from 177 to 180//
 function norm(s){return String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g,'');}
 function first(row,names){
-  const keys = Object.keys(row || {});
+  const keys=Object.keys(row || {});
   for(const name of names){
-    const nn = norm(name);
-    const k = keys.find(x => norm(x) === nn) || keys.find(x => nn.length > 4 && norm(x).includes(nn));
-    if(k && String(row[k] ?? '').trim() !== '') return row[k];
+    const key=keys.find(k=>norm(k)===norm(name));
+    if(key && String(row[key] ?? '').trim()!=='') return row[key];
   }
   return '';
 }
@@ -463,7 +466,9 @@ function mapRows(rows){
     const fileDate = first(row,['File Date','Date','Completed Date','Production Date','Process Date']);
     const dt = parseDate(fileDate);
     const fileName = first(row,['File Name','Filename','Document Name','Name','Title','File']);
-    let volume = num(first(row,['Actual Volume','Volume','Count','Total Volume','Monthly Volume','Documents','Files','Output']));
+    const countRaw=first(row,['Actual Volume','Total Volume','Monthly Volume','Production Volume','Volume','Document Count','Count','Documents','Files','Output','Total']);
+    const hasVolumeColumn=Object.keys(row).some(k=>['actualvolume','totalvolume','monthlyvolume','productionvolume','volume','documentcount','count','documents','files','output','total'].includes(norm(k)));
+    const volume=hasVolumeColumn ? num(countRaw) : (fileName || first(row,['Document Title','Case Number']) ? 1 : 0);
     // Blank and zero volume cells contribute zero, not one.
     return {
       recordId:first(row,['Record ID','ID','No']) || i+1,
@@ -474,7 +479,7 @@ function mapRows(rows){
       jx:detectJx(row),
       folder:first(row,['Folder','Folder Name','Document Type','Type']),
       volume,
-      editor:first(row,['FTE','Specialist','Editor','Editor Name','User','Employee','Name']) || 'Unknown'
+      editor:first(row,['Editor Name','Editor','Specialist','Employee','User','FTE','Name']) || 'Unknown'
     };
   }).filter(r => r.volume > 0 && (r.docTitle || r.caseNumber || r.fileDate || r.jx !== 'Unknown' || r.editor !== 'Unknown'));
 }
@@ -533,6 +538,9 @@ function resetDashboard(){
   rawRows = [];
   records = [];
   $('fileInput').value = '';
+  uploadedSheets = []; selectedSheetIndex = -1;
+  $('sheetSelectorWrap').style.display='none';
+  $('uploadStatus').textContent='Upload an Excel or CSV file to begin.';
   $('startDate').value = '';
   $('endDate').value = '';
   populateJx([]);
@@ -583,7 +591,6 @@ function filtered(){
 }
 //-------Heart of the Dashboard-----356 to 405//
 function render(){
-  records = mapRows(rawRows);
   const data = filtered();
   const total = data.reduce((a,r)=>a+r.volume,0);
   const metric = getMetricStatus(total);
@@ -650,34 +657,85 @@ function renderTables(data){
     `<tr><td>${esc(editor)}</td><td class="num">${volume.toLocaleString()}</td><td class="num">${target.toLocaleString()}</td><td class="num ${remaining<=0?'remaining-ok':'remaining-due'}">${remaining.toLocaleString()}</td></tr>`
   ).join('') || '<tr><td colspan="4">No data loaded.</td></tr>';
 }
-//------excel reading-------from 431 to 446//
-async function readFile(file){
-  const buf = await file.arrayBuffer();
-  const lower = file.name.toLowerCase();
-  if(lower.endsWith('.csv')){
-    const text = new TextDecoder().decode(buf);
-    const wb = XLSX.read(text,{type:'string'});
-    let rows = [];
-    wb.SheetNames.filter(s=>!/^(summary|dashboard|totals?|target|accuracy|team score)$/i.test(s.trim())).forEach(s=>{ rows.push(...XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:'',raw:false})); });
-    return rows;
+// Robust Excel and CSV import. Each sheet is inspected independently.
+const HEADER_ALIASES = {
+  editor:['editorname','editor','specialist','employee','user','fte','name'],
+  volume:['actualvolume','totalvolume','monthlyvolume','productionvolume','volume','documentcount','count','documents','files','output','total'],
+  date:['filedate','date','completeddate','productiondate','processdate'],
+  document:['documenttitle','doctitle','filename','documentname','casenumber','title','file'],
+  jx:['jx','jurisdiction','county','courtcounty','location']
+};
+function sheetRows(sheet){
+  const matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false,blankrows:false});
+  if(!matrix.length) return {rows:[],score:0,headerRow:-1};
+  let best=-1,score=-1;
+  for(let i=0;i<Math.min(35,matrix.length);i++){
+    const values=matrix[i].map(norm);
+    const groups=Object.entries(HEADER_ALIASES).filter(([group,aliases])=>values.some(v=>aliases.includes(v))).map(x=>x[0]);
+    const points=(groups.includes('editor')?5:0)+(groups.includes('volume')?5:0)+(groups.includes('date')?2:0)+(groups.includes('document')?2:0)+(groups.includes('jx')?1:0);
+    if(points>score){score=points;best=i;}
   }
-  
-  const wb = XLSX.read(buf,{type:'array',cellDates:true});
-  let rows = [];
-  wb.SheetNames.filter(s=>!/^(summary|dashboard|totals?|target|accuracy|team score)$/i.test(s.trim())).forEach(s=>{ rows.push(...XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:'',raw:false})); });
-  return rows;
+  if(score<5) return {rows:[],score,headerRow:best};
+  const headings=matrix[best].map((v,i)=>String(v || 'Column_'+(i+1)).trim());
+  const rows=[];
+  for(const values of matrix.slice(best+1)){
+    if(!values.some(v=>String(v??'').trim())) continue;
+    const row={};
+    headings.forEach((h,i)=>{row[h]=values[i]??'';});
+    rows.push(row);
+  }
+  return {rows,score,headerRow:best};
 }
-
-//-----Uploading excel reader------ from 449 to 458//
-$('fileInput').addEventListener('change',async e=>{
-  rawRows = [];
-  for(const file of [...e.target.files]){
-    try{ rawRows.push(...await readFile(file)); }
-    catch(err){ console.error(err); alert('Could not read ' + file.name); }
-
-  }
-  populateJx(mapRows(rawRows));
+async function readFile(file){
+  if(typeof XLSX==='undefined') throw new Error('Excel reader library could not load. Connect to the internet and reload this page.');
+  const bytes=await file.arrayBuffer();
+  const wb=XLSX.read(bytes,{type:'array',cellDates:true});
+  return wb.SheetNames.map(name=>{
+    const parsed=sheetRows(wb.Sheets[name]);
+    return {file:file.name,name,...parsed};
+  });
+}
+function selectProductionSheet(){
+  selectedSheetIndex=Number($('sheetSelector').value);
+  const sheet=uploadedSheets[selectedSheetIndex];
+  rawRows=sheet?sheet.rows:[];
+  records=mapRows(rawRows);
+  populateJx(records);
   render();
+  const total=records.reduce((sum,r)=>sum+r.volume,0);
+  $('uploadStatus').textContent=sheet
+    ? `${sheet.file} / ${sheet.name}: ${records.length.toLocaleString()} production rows, ${total.toLocaleString()} documents. Header found at Excel row ${sheet.headerRow+1}.`
+    : 'No worksheet selected.';
+}
+$('fileInput').addEventListener('change',async e=>{
+  const files=Array.from(e.target.files);
+  uploadedSheets=[];rawRows=[];records=[];
+  $('uploadStatus').textContent='Reading uploaded files...';
+  const errors=[];
+  for(const file of files){
+    try{uploadedSheets.push(...await readFile(file));}
+    catch(err){errors.push(`${file.name}: ${err.message}`);console.error(err);}
+  }
+  const selector=$('sheetSelector');
+  selector.innerHTML='';
+  uploadedSheets.forEach((sheet,i)=>{
+    const option=document.createElement('option');
+    option.value=String(i);
+    option.textContent=`${sheet.file} / ${sheet.name} (${sheet.rows.length} rows${sheet.score<5?', headers not recognized':''})`;
+    selector.appendChild(option);
+  });
+  $('sheetSelectorWrap').style.display=uploadedSheets.length?'block':'none';
+  if(uploadedSheets.length){
+    const scored=uploadedSheets.map((s,i)=>({i,score:s.score,rows:mapRows(s.rows).length,name:s.name}));
+    scored.sort((a,b)=>b.score-a.score || b.rows-a.rows);
+    selector.value=String(scored[0].i);
+    selectProductionSheet();
+    if(errors.length) $('uploadStatus').textContent+=' Errors: '+errors.join(' | ');
+    if(!records.length) $('uploadStatus').textContent+=' No production records recognized. Select another worksheet or check its column headers.';
+  }else{
+    populateJx([]);render();
+    $('uploadStatus').textContent=errors.length?errors.join(' | '):'No worksheets found in the uploaded file.';
+  }
 });
 //----Exporting the Report---- from 460 to 474//
 function downloadReport(){
