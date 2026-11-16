@@ -147,7 +147,7 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
   </div>
 
   <div id="uploadStatus" role="status" aria-live="polite" style="margin:10px 0;padding:10px 14px;border:1px solid #dbeafe;border-radius:8px;color:#334155;background:#f8fbff">Upload an Excel or CSV file to begin.</div>
-  <div id="sheetSelectorWrap" style="display:none;margin:10px 0;padding:12px;border:1px solid #dbeafe;border-radius:8px"><label for="sheetSelector"><strong>Choose the production worksheet</strong></label><select id="sheetSelector" style="width:100%;padding:9px;margin-top:6px" onchange="selectProductionSheet()"></select><small id="sheetHint" style="display:block;margin-top:5px;color:#64748b">Choose the worksheet containing editor names and production counts.</small></div>
+  <div id="sheetSelectorWrap" style="display:none;margin:10px 0;padding:12px;border:1px solid #dbeafe;border-radius:8px"><label for="sheetSelector"><strong>Production worksheets (Week 1–5 combined automatically)</strong></label><select id="sheetSelector" style="width:100%;padding:9px;margin-top:6px" onchange="selectProductionSheet()"></select><small id="sheetHint" style="display:block;margin-top:5px;color:#64748b">All Weeks combines Week 1 through Week 5; select a single sheet to inspect it.</small></div>
   <section class="kpis">
     <div class="card"><h3>Full-Time</h3><div id="fte" class="value">22</div></div>
     <div class="card"><h3>Monthly Volume</h3><div id="monthlyVolume" class="value">0</div><small>Filtered total</small></div>
@@ -695,17 +695,30 @@ async function readFile(file){
     return {file:file.name,name,...parsed};
   });
 }
+// Recognize Week 1 through Week 5, including Week1, WEEK_2 and W3.
+function weekNumber(sheetName){
+  const match=String(sheetName).trim().match(/(?:^|[^a-z0-9])(?:week|wk|w)[\s_.-]*([1-5])(?:$|[^0-9])/i);
+  return match?Number(match[1]):null;
+}
+function productionWeekSheets(){
+  return uploadedSheets.filter(s=>weekNumber(s.name)!==null && s.rows.length>0 && s.score>=5)
+    .sort((a,b)=>weekNumber(a.name)-weekNumber(b.name));
+}
 function selectProductionSheet(){
-  selectedSheetIndex=Number($('sheetSelector').value);
-  const sheet=uploadedSheets[selectedSheetIndex];
-  rawRows=sheet?sheet.rows:[];
+  const selection=$('sheetSelector').value;
+  const sheets=selection==='all-weeks'?productionWeekSheets():[uploadedSheets[Number(selection)]].filter(Boolean);
+  // Keep each weekly worksheet's production rows. Do not include summary sheets
+  // when the combined Week 1-5 option is selected.
+  rawRows=sheets.flatMap(s=>s.rows);
   records=mapRows(rawRows);
   populateJx(records);
   render();
   const total=records.reduce((sum,r)=>sum+r.volume,0);
-  $('uploadStatus').textContent=sheet
-    ? `${sheet.file} / ${sheet.name}: ${records.length.toLocaleString()} production rows, ${total.toLocaleString()} documents. Header found at Excel row ${sheet.headerRow+1}.`
-    : 'No worksheet selected.';
+  const label=selection==='all-weeks'?'All Weeks (Week 1–5)':(sheets[0]?`${sheets[0].file} / ${sheets[0].name}`:'No worksheet');
+  const weekCounts=sheets.map(s=>`Week ${weekNumber(s.name)}: ${mapRows(s.rows).reduce((n,r)=>n+r.volume,0).toLocaleString()}`);
+  $('uploadStatus').textContent=`${label}: ${records.length.toLocaleString()} production rows, ${total.toLocaleString()} documents.`+
+    (selection==='all-weeks'?' '+weekCounts.join(' | '):'')+
+    (selection==='all-weeks' && sheets.length<5?' Missing/unrecognized: '+[1,2,3,4,5].filter(n=>!sheets.some(s=>weekNumber(s.name)===n)).map(n=>'Week '+n).join(', '):'');
 }
 $('fileInput').addEventListener('change',async e=>{
   const files=Array.from(e.target.files);
@@ -718,6 +731,13 @@ $('fileInput').addEventListener('change',async e=>{
   }
   const selector=$('sheetSelector');
   selector.innerHTML='';
+  const weekSheets=productionWeekSheets();
+  if(weekSheets.length){
+    const all=document.createElement('option');
+    all.value='all-weeks';
+    all.textContent=`All Weeks (Week 1–5 combined; ${weekSheets.length} recognized)`;
+    selector.appendChild(all);
+  }
   uploadedSheets.forEach((sheet,i)=>{
     const option=document.createElement('option');
     option.value=String(i);
@@ -726,9 +746,12 @@ $('fileInput').addEventListener('change',async e=>{
   });
   $('sheetSelectorWrap').style.display=uploadedSheets.length?'block':'none';
   if(uploadedSheets.length){
-    const scored=uploadedSheets.map((s,i)=>({i,score:s.score,rows:mapRows(s.rows).length,name:s.name}));
-    scored.sort((a,b)=>b.score-a.score || b.rows-a.rows);
-    selector.value=String(scored[0].i);
+    if(weekSheets.length){selector.value='all-weeks';}
+    else{
+      const scored=uploadedSheets.map((s,i)=>({i,score:s.score,rows:mapRows(s.rows).length}));
+      scored.sort((a,b)=>b.score-a.score || b.rows-a.rows);
+      selector.value=String(scored[0].i);
+    }
     selectProductionSheet();
     if(errors.length) $('uploadStatus').textContent+=' Errors: '+errors.join(' | ');
     if(!records.length) $('uploadStatus').textContent+=' No production records recognized. Select another worksheet or check its column headers.';
