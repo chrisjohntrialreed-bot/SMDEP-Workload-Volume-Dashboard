@@ -76,7 +76,7 @@ body{margin:0;padding:10px;background:var(--bg);font-family:'Segoe UI',Arial,san
 .login-overlay{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#2579e7,#f19306);display:flex;align-items:center;justify-content:center;padding:20px}
 .login-box{width:min(420px,100%);background:#fff;border-radius:16px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center}
 .login-box h2{margin:0 0 6px;color:#20364d}.login-box p{margin:0 0 20px;color:#64748b}.login-box input{width:100%;padding:12px;margin:7px 0;border:1px solid #cfd6df;border-radius:8px;font-size:15px}.login-box button{width:100%;margin-top:10px;padding:12px;border:0;border-radius:8px;background:#2579e7;color:#fff;font-weight:800;cursor:pointer}.login-box button:hover{background:#1d63c2}.login-error{min-height:20px;margin-top:8px;color:#dc2626;font-size:13px;font-weight:700}.login-error.clickable{cursor:pointer;text-decoration:underline;text-underline-offset:3px}.login-error.clickable:hover{color:#b91c1c}.account-btn{background:#fff!important;color:#20364d!important}.account-panel{position:fixed;z-index:10000;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;padding:20px}.account-box{width:min(440px,100%);background:#fff;border-radius:14px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.25)}.account-box h3{margin-top:0}.account-box input{width:100%;padding:10px;margin:6px 0 12px;border:1px solid #cfd6df;border-radius:7px}.account-actions{display:flex;gap:10px}.account-actions button{flex:1}.app.locked{display:none}
-@media(max-width:900px){.grid,.kpis{grid-template-columns:1fr}.header{display:block}.header h1{font-size:24px}.actions{margin-top:12px}.card .value{font-size:34px}.top-controls{flex-direction:column;align-items:stretch}.reph-art{width:100%;min-width:0}.control{width:100%}}
+@media(max-width:1100px){.grid,.kpis{grid-template-columns:1fr}.header{display:block}.header h1{font-size:24px}.actions{margin-top:12px}.card .value{font-size:34px}.top-controls{flex-direction:column;align-items:stretch}.reph-art{width:100%;min-width:0}.control{width:100%}}
 </style>
 </head>
 <body>
@@ -379,15 +379,21 @@ function initializeLogin(){
 const FTE = 22;
 const TARGET_VOLUME = 57200;
 const ANNUAL_TARGET = 400000;
-const SPECIAL_EDITOR_TARGET = 1418;
-const DEFAULT_EDITOR_TARGET = 2835;
-const SPECIAL_EDITORS = ['tiron','baricuatro','hervias','rebua','sucatron','gregorio','funa','labita','tabilla'];
-function isSpecialEditor(name){
-  const text = String(name || '').toLowerCase();
-  return SPECIAL_EDITORS.some(s => text.includes(s));
-}
+// Individual editor quotas. Matching is case-insensitive.
+const TARGET_2520_EDITORS = new Set([
+  'anaud','boteros','casulatan','esteves','gasendo',
+  'gayuna','lasconia','laubenia','lisao','villabeto'
+]);
+const TARGET_1260_EDITORS = new Set([
+  'almonte','baricuatro','funa','gregorio','hervias','labita',
+  'magbanua','rebua','sucatron','tabilla','tating','tiron'
+]);
 function editorTargetFor(name){
-  return isSpecialEditor(name) ? SPECIAL_EDITOR_TARGET : DEFAULT_EDITOR_TARGET;
+  const normalized = String(name || '').toLowerCase().trim().replace(/\s+/g,' ');
+  const tokens = normalized.split(/[^a-z]+/).filter(Boolean);
+  if(tokens.some(part => TARGET_1260_EDITORS.has(part))) return 1260;
+  if(tokens.some(part => TARGET_2520_EDITORS.has(part))) return 2520;
+  return 2835; // Fallback for editors not listed above
 }
 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 let rawRows = [];
@@ -402,7 +408,7 @@ function first(row,names){
   const keys = Object.keys(row || {});
   for(const name of names){
     const nn = norm(name);
-    const k = keys.find(x => norm(x) === nn || norm(x).includes(nn) || nn.includes(norm(x)));
+    const k = keys.find(x => norm(x) === nn) || keys.find(x => nn.length > 4 && norm(x).includes(nn));
     if(k && String(row[k] ?? '').trim() !== '') return row[k];
   }
   return '';
@@ -447,7 +453,7 @@ function isSummaryRow(row){
   const text = Object.values(row || {}).join(' ').toLowerCase().trim();
   const marker = String(first(row,['FTE','Specialist','Editor','Editor Name','User','Employee','Name','Document Title','Title']) || '').toLowerCase().trim();
   if(!text) return true;
-  if(['accuracy','total','grand total','summary','average','target','remaining','monthly volume','volume','count'].includes(marker)) return true;
+  if(['accuracy','total','grand total','summary','average','target','remaining','monthly volume','volume','count','team score','teamscore'].includes(marker)) return true;
   if(/^total\b|grand total|summary row|overall total/.test(text)) return true;
   return false;
 }
@@ -458,7 +464,7 @@ function mapRows(rows){
     const dt = parseDate(fileDate);
     const fileName = first(row,['File Name','Filename','Document Name','Name','Title','File']);
     let volume = num(first(row,['Actual Volume','Volume','Count','Total Volume','Monthly Volume','Documents','Files','Output']));
-    if(volume === 0) volume = 1;
+    // Blank and zero volume cells contribute zero, not one.
     return {
       recordId:first(row,['Record ID','ID','No']) || i+1,
       docTitle:first(row,['Document Title','Doc Title','Title']) || fileName,
@@ -470,7 +476,7 @@ function mapRows(rows){
       volume,
       editor:first(row,['FTE','Specialist','Editor','Editor Name','User','Employee','Name']) || 'Unknown'
     };
-  }).filter(r => r.docTitle || r.caseNumber || r.fileDate || r.jx !== 'Unknown' || r.editor !== 'Unknown');
+  }).filter(r => r.volume > 0 && (r.docTitle || r.caseNumber || r.fileDate || r.jx !== 'Unknown' || r.editor !== 'Unknown'));
 }
 function getMetricStatus(volume){
   if(volume < TARGET_VOLUME) return {text:'Below Target', color:'#dc2626', cls:'status-below'};
@@ -578,7 +584,6 @@ function filtered(){
 //-------Heart of the Dashboard-----356 to 405//
 function render(){
   records = mapRows(rawRows);
-  if(rawRows.length) populateJx(records);
   const data = filtered();
   const total = data.reduce((a,r)=>a+r.volume,0);
   const metric = getMetricStatus(total);
@@ -627,28 +632,23 @@ function render(){
   renderTables(data);
 }
 //------Individual Editor Productivity---- from 407 to 429//
-function renderTables(data){
-  const editors = {};
-  const invalidEditors = new Set(['accuracy','total','grand total','summary','average','target','remaining','monthly volume','volume','count','fte','specialist','editor','editor name','name']);
-
-  data.forEach(r=>{
-    const editor = String(r.editor || '').trim();
+function editorSummary(data){
+  const editors = new Map();
+  const invalid = new Set(['accuracy','total','grand total','summary','average','target','remaining','monthly volume','volume','count','fte','specialist','editor','editor name','name','team score','teamscore','unknown']);
+  data.forEach(r => {
+    const editor = String(r.editor || '').trim().replace(/\s+/g,' ');
     const key = editor.toLowerCase();
-    if(!editor || invalidEditors.has(key)) return;
-    editors[editor] = (editors[editor] || 0) + Number(r.volume || 0);
+    if(!editor || invalid.has(key)) return;
+    if(!editors.has(key)) editors.set(key,{editor,volume:0});
+    editors.get(key).volume += Number(r.volume || 0);
   });
-
-  $('editorBody').innerHTML = Object.entries(editors)
-    .sort((a,b)=>a[0].localeCompare(b[0],undefined,{sensitivity:'base'}))
-    .map(([editor,volume])=>{
-      const target = editorTargetFor(editor);
-      const targetText = target > 0 ? target.toLocaleString() : '-';
-      const remaining = target > 0 ? (target - volume) : null;
-      const remainingText = remaining === null ? '-' : remaining.toLocaleString();
-      const remainingClass = remaining === null ? '' : remaining <= 0 ? 'remaining-ok' : 'remaining-due';
-      return `<tr><td>${esc(editor)}</td><td class="num">${volume.toLocaleString()}</td><td class="num">${targetText}</td><td class="num ${remainingClass}">${remainingText}</td></tr>`;
-    })
-    .join('') || '<tr><td colspan="4">No data loaded.</td></tr>';
+  return [...editors.values()].sort((a,b)=>a.editor.localeCompare(b.editor,undefined,{sensitivity:'base'}))
+    .map(({editor,volume})=>({editor,volume,target:editorTargetFor(editor),remaining:editorTargetFor(editor)-volume}));
+}
+function renderTables(data){
+  $('editorBody').innerHTML = editorSummary(data).map(({editor,volume,target,remaining})=>
+    `<tr><td>${esc(editor)}</td><td class="num">${volume.toLocaleString()}</td><td class="num">${target.toLocaleString()}</td><td class="num ${remaining<=0?'remaining-ok':'remaining-due'}">${remaining.toLocaleString()}</td></tr>`
+  ).join('') || '<tr><td colspan="4">No data loaded.</td></tr>';
 }
 //------excel reading-------from 431 to 446//
 async function readFile(file){
@@ -658,13 +658,13 @@ async function readFile(file){
     const text = new TextDecoder().decode(buf);
     const wb = XLSX.read(text,{type:'string'});
     let rows = [];
-    wb.SheetNames.forEach(s=>{ rows.push(...XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:'',raw:false})); });
+    wb.SheetNames.filter(s=>!/^(summary|dashboard|totals?|target|accuracy|team score)$/i.test(s.trim())).forEach(s=>{ rows.push(...XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:'',raw:false})); });
     return rows;
   }
   
   const wb = XLSX.read(buf,{type:'array',cellDates:true});
   let rows = [];
-  wb.SheetNames.forEach(s=>{ rows.push(...XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:'',raw:false})); });
+  wb.SheetNames.filter(s=>!/^(summary|dashboard|totals?|target|accuracy|team score)$/i.test(s.trim())).forEach(s=>{ rows.push(...XLSX.utils.sheet_to_json(wb.Sheets[s],{defval:'',raw:false})); });
   return rows;
 }
 
@@ -681,24 +681,18 @@ $('fileInput').addEventListener('change',async e=>{
 });
 //----Exporting the Report---- from 460 to 474//
 function downloadReport(){
-  const data = filtered().map(r=>{
-    const target = editorTargetFor(r.editor);
-    return {
-      'Record ID':r.recordId,
-      'Document Title':r.docTitle,
-      'Case Number':r.caseNumber,
-      'File Date':r.fileDate,
-      'JX':r.jx,
-      'Folder':r.folder,
-      'Volume':r.volume,
-      'Editor':r.editor,
-      'Target': target > 0 ? target : '',
-      'Remaining': target > 0 ? (target - Number(r.volume || 0)) : ''
-    };
-  });
-  const ws = XLSX.utils.json_to_sheet(data);
+  const data = filtered();
+  const summary = editorSummary(data);
+  const ws = XLSX.utils.json_to_sheet(summary.map(r=>({
+    'Editor Name':r.editor,'Total Volume':r.volume,'Target':r.target,'Remaining':r.remaining
+  })));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Production Report');
+  XLSX.utils.book_append_sheet(wb,ws,'Editor Summary');
+  const details = data.map(r=>({
+    'Record ID':r.recordId,'Document Title':r.docTitle,'Case Number':r.caseNumber,
+    'File Date':r.fileDate,'JX':r.jx,'Folder':r.folder,'Volume':r.volume,'Editor':r.editor
+  }));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(details),'Production Details');
   XLSX.writeFile(wb,'Productivity_Report.xlsx');
 }
 document.addEventListener('DOMContentLoaded',()=>{initializeLogin();initCharts();resetDashboard();});
